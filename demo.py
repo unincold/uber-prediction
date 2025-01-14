@@ -4,7 +4,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from llmagent import LLMagent
 
-# 假设数据已经准备好，存储在 df 中
+
+####df is not prepared
 df = pd.read_csv('data.csv')
 
 # 预处理
@@ -53,8 +54,9 @@ def discover_hidden_features(agent, X, y):
     # 使用 LLM 生成隐藏特征的描述
     response = agent.run(prompt)
 
-    # 解析 LLM 的输出并生成隐藏特征
-
+    #response->new_features is not finished
+    #missing_part
+    #below is demo
     new_features = np.c_[
         X[:, 0] ** 2,  
         X[:, 1] * X[:, 2]  
