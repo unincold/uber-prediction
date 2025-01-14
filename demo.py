@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import re
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from llmagent import LLMagent
@@ -30,6 +31,33 @@ X_scaled = scaler.fit_transform(X)
 # split data
 X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
 agent = LLMagent()
+def response_to_features(response, X):
+    """
+    将 LLM 响应解析为隐藏特征。
+    Args:
+        response: LLM 的文本响应 (str)。
+        X: 原始特征数据 (numpy array)。
+    Returns:
+        new_features: 生成的隐藏特征 (numpy array)。
+    """
+    hidden_features = []
+    for match in re.finditer(r"特征\s*(\d+)\s*(的平方|和特征\s*(\d+)\s*的乘积|的对数)", response):
+        feature_idx = int(match.group(1))
+        operation = match.group(2)
+        
+        if operation == "的平方":
+            hidden_features.append(X[:, feature_idx] ** 2)
+        elif "乘积" in operation and match.group(3):
+            second_feature_idx = int(match.group(3))
+            hidden_features.append(X[:, feature_idx] * X[:, second_feature_idx])
+        elif operation == "的对数":
+            safe_values = np.maximum(X[:, feature_idx], 1e-6)
+            hidden_features.append(np.log(safe_values))
+    
+    if hidden_features:
+        return np.stack(hidden_features, axis=1)
+    else:
+        return np.empty((X.shape[0], 0))
 
 def discover_hidden_features(agent, X, y):
     """
@@ -57,10 +85,7 @@ def discover_hidden_features(agent, X, y):
     #response->new_features is not finished
     #missing_part
     #below is demo
-    new_features = np.c_[
-        X[:, 0] ** 2,  
-        X[:, 1] * X[:, 2]  
-    ]
+    new_features = response_to_features(response, X)
 
     print("feature:", response)
     return new_features
