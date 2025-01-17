@@ -5,6 +5,12 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from llmagent import LLMagent
 
+def get_price(hour, day_of_week, location, model, weather, traffic):
+    
+    #use uber api to get the price
+    #price = uber_api.get_price(hour, day_of_week, location, model, weather, traffic)
+    return price
+
 
 ####df is not prepared
 df = pd.read_csv('data.csv')
@@ -13,16 +19,15 @@ df = pd.read_csv('data.csv')
 
 df['date_time'] = pd.to_datetime(df['date_time'])
 
-# 提取时间特征
 df['hour'] = df['date_time'].dt.hour
 df['day_of_week'] = df['date_time'].dt.weekday
 
 df.fillna(df.mean(), inplace=True)
 
-# 特征选择
+# features and target
 features = ['hour', 'day_of_week', 'location', 'model', 'weather', 'traffic']
 X = df[features]
-y = df['price']  # 价格作为目标变量
+y = df['price']  
 
 #standard
 scaler = StandardScaler()
@@ -69,14 +74,15 @@ def discover_hidden_features(agent, X, y):
     Returns:
         hidden_features: 生成的隐藏特征 (numpy array)。
     """
-    # 转换为 DataFrame 以便语言模型处理
+    
     df = pd.DataFrame(X, columns=[f'feature_{i}' for i in range(X.shape[1])])
     df['target'] = y
 
-    # 将数据转换为描述文本，用于 LLM 分析
+    # can change the prompt to English
     prompt = (
-        f"以下是一些特征和目标变量的数据样本：\n\n{df.head().to_string(index=False)}\n\n"
-        "请分析这些特征与目标变量之间的潜在关系，并建议可能的隐藏特征（如交互项、非线性变换等）。"
+        f"these are the features and target variables:\n\n{df.head().to_string(index=False)}\n\n"
+        "please discover the hidden features and return the result in standard format."
+        
     )
 
     # 使用 LLM 生成隐藏特征的描述
@@ -85,11 +91,25 @@ def discover_hidden_features(agent, X, y):
     #response->new_features is not finished
     #missing_part
     #below is demo
+
+
     new_features = response_to_features(response, X)
 
     print("feature:", response)
     return new_features
 
+def analyze_weight_of_features(agent, X, y):
+    #if a feature changes 1%, how much the price will change
+    df = pd.DataFrame(X, columns=[f'feature_{i}' for i in range(X.shape[1])])
+    df['target'] = y
+    #ask the agent to analyze the weight of the features by changing 1%
+    prompt = (
+        f"these are the features and target variables:\n\n{df.head().to_string(index=False)}\n\n"
+        "please analyze the weight of the features by changing 1% and return the result in standard format."
+    )
+    response = agent.run(prompt)
+    #deal with the response and output the format
+    return response
 
 
 def analyze_price_strategy(agent, X, y):
@@ -106,34 +126,42 @@ def analyze_price_strategy(agent, X, y):
     df = pd.DataFrame(X, columns=[f'feature_{i}' for i in range(X.shape[1])])
     df['target'] = y
 
-    # 计算一些统计指标，用于策略分析
+
     feature_stats = df.describe().to_string()
     correlation_matrix = df.corr().to_string()
 
     # 构造 prompt 提示 LLM 分析策略
     prompt = (
-        f"以下是打车定价策略的数据特征和目标变量的统计信息：\n\n"
-        f"特征统计：\n{feature_stats}\n\n"
-        f"特征与目标变量的相关性：\n{correlation_matrix}\n\n"
-        "基于这些数据，请分析定价策略的特点，例如是否存在动态定价、"
-        "影响价格的主要因素是什么，以及如何优化定价策略。"
+        f"these are the features and target variables:\n\n{df.head().to_string(index=False)}\n\n"
+        f"feature statistics:\n\n{feature_stats}\n\n"
+        f"correlation matrix:\n\n{correlation_matrix}\n\n"
+        "please analyze the price strategy and return the result in standard format."
+        
     )
 
     # 使用 LLMagent 分析策略
     response = agent.run(prompt)
 
-    print("价格策略分析完成。")
+    print("done")
     return response
 
 
-# 发现隐藏特征
-hidden_features = discover_hidden_features(agent, X_train, y_train)
 
+hidden_features = discover_hidden_features(agent, X_train, y_train)
+#1 relations
+relation_Xtrain_and_hidden = np.corrcoef(X_train.T, hidden_features.T)
+if (relation_Xtrain_and_hidden > 0.5).all():
+    #redo the prompt
+    hidden_features = discover_hidden_features(agent, X_train, y_train)
 # 将隐藏特征添加到原始特征中
 X_train_enhanced = np.hstack((X_train, hidden_features))
 X_test_enhanced = np.hstack((X_test, hidden_features))
-
+#analyse hidden features with other features not listed in the prompt
+#print the probility the price is related to the hidden features and some data related to the hidden features
+'''undo'''
+'''goal: to find the hidden features that are related to the price'''
 # 分析价格策略
+
 result = analyze_price_strategy(agent, X_test_enhanced, y_test)
 
 # 输出分析结果
